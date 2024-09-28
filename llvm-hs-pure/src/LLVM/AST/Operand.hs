@@ -1,9 +1,6 @@
 {-# LANGUAGE DuplicateRecordFields #-}
 -- | A type to represent operands to LLVM 'LLVM.AST.Instruction.Instruction's
-module LLVM.AST.Operand
-( module LLVM.AST.Operand
-)
-where
+module LLVM.AST.Operand where
 
 import LLVM.Prelude
 

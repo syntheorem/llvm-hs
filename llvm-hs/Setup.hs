@@ -12,6 +12,7 @@ import Distribution.Simple.PreProcess
 import Distribution.Simple.Program
 import Distribution.Simple.Setup hiding (Flag)
 import Distribution.System
+import Distribution.Verbosity
 import System.Environment
 
 #ifdef MIN_VERSION_Cabal
@@ -64,9 +65,17 @@ findJustBy f (x:xs) = do
     j -> return j
 findJustBy _ [] = return Nothing
 
+llvmConfigFindLocation :: Verbosity -> ProgramSearchPath -> IO (Maybe (FilePath, [FilePath]))
+llvmConfigFindLocation v p = do
+  mLLVMPrefix <- lookupEnv "LLVM_HS_LLVM_INSTALL_PREFIX"
+  let searchPath = case mLLVMPrefix of
+        Just prefix -> [ProgramSearchPathDir (prefix ++ "/bin")]
+        Nothing -> p
+  findJustBy (\n -> programFindLocation (simpleProgram n) v searchPath) llvmConfigNames
+
 llvmProgram :: Program
 llvmProgram = (simpleProgram "llvm-config") {
-  programFindLocation = \v p -> findJustBy (\n -> programFindLocation (simpleProgram n) v p) llvmConfigNames,
+  programFindLocation = llvmConfigFindLocation,
   programFindVersion = \verbosity path ->
     let
       stripVcsSuffix = takeWhile (\c -> isDigit c || c == '.')
@@ -141,6 +150,12 @@ main = do
       libs_static   <- getLibs ["--libs", "--system-libs", "--link-static"]
       libs_shared   <- getLibs ["--libs", "--system-libs", "--link-shared"]
 
+      linkModeOverride <- lookupEnv "LLVM_HS_LVVM_LINK_MODE"
+      let libs = case linkModeOverride of
+            Just "static" -> libs_static
+            Just "shared" -> libs_shared
+            _ -> libs_static
+
       let genericPackageDescription' = genericPackageDescription {
             condLibrary = do
               libraryCondTree <- condLibrary genericPackageDescription
@@ -149,7 +164,7 @@ main = do
                     libBuildInfo =
                       mempty {
                         ccOptions = llvmCxxFlags,
-                        extraLibs = stdLib : libs_static,
+                        extraLibs = stdLib : libs,
                         extraGHCiLibs = libs_shared
                       }
                   }
